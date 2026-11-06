@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Process Scheduling & Resource Allocation Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: #2a2a3a;
+    --accent: #6c63ff;
+    --accent2: #00d4aa;
+    --accent3: #ff6b6b;
+    --accent4: #ffd93d;
+    --text: #e8e8f0;
+    --text2: #8888aa;
+    --text3: #555570;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 20% 20%, rgba(108,99,255,0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(0,212,170,0.06) 0%, transparent 50%);
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 40px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    background: rgba(10,10,15,0.92);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+
+  .logo {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  header h1 {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+
+  header p {
+    font-size: 12px;
+    color: var(--text2);
+    font-family: var(--mono);
+  }
+
+  .status-dot {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text2);
+    font-family: var(--mono);
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #555;
+    animation: pulse 2s infinite;
+  }
+
+  .dot.online { background: var(--accent2); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Layout ── */
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 24px;
+  }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 4px;
+    margin-bottom: 32px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .tab:hover { color: var(--text); background: var(--surface2); }
+
+  .tab.active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text2);
+    font-family: var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .card-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Process Table ── */
+  .process-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+  }
+
+  .process-table th {
+    text-align: left;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text3);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0 12px 12px;
+  }
+
+  .process-table td {
+    padding: 4px 8px;
+  }
+
+  .process-table input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 9px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+
+  .process-table input:focus {
+    border-color: var(--accent);
+  }
+
+  .btn-icon {
+    width: 34px; height: 34px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text3);
+    cursor: pointer;
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .btn-icon:hover { border-color: var(--accent3); color: var(--accent3); background: rgba(255,107,107,0.08); }
+
+  /* ── Buttons ── */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    border: none;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .btn-primary:hover { background: #7c74ff; transform: translateY(-1px); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text2);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .btn-success {
+    background: var(--accent2);
+    color: #000;
+  }
+
+  .btn-success:hover { background: #00e8ba; transform: translateY(-1px); }
+
+  .btn-add {
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--text2);
+    font-size: 13px;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: all 0.2s;
+  }
+
+  .btn-add:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Algorithm selector ── */
+  .algo-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+
+  .algo-pill {
+    padding: 8px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .algo-pill:hover { border-color: var(--accent); color: var(--accent); }
+  .algo-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* ── Gantt Chart ── */
+  .gantt-wrap {
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .gantt-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 500px;
+  }
+
+  .gantt-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .gantt-label {
+    width: 36px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text2);
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  .gantt-track {
+    flex: 1;
+    height: 36px;
+    position: relative;
+    background: var(--surface2);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .gantt-block {
+    position: absolute;
+    top: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 4px;
+    transition: opacity 0.2s;
+    cursor: default;
+  }
+
+  .gantt-block:hover { opacity: 0.85; }
+
+  .gantt-timeline {
+    display: flex;
+    margin-left: 44px;
+    margin-top: 4px;
+  }
+
+  .gantt-tick {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    position: absolute;
+  }
+
+  .gantt-ticks-row {
+    flex: 1;
+    position: relative;
+    height: 16px;
+  }
+
+  /* ── Metrics ── */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .metric-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    text-align: center;
+  }
+
+  .metric-val {
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .metric-val.green { color: var(--accent2); }
+  .metric-val.yellow { color: var(--accent4); }
+
+  .metric-label {
+    font-size: 11px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Results Table ── */
+  .results-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .results-table th {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text3);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .results-table td {
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 13px;
+    border-bottom: 1px solid rgba(42,42,58,0.5);
+  }
+
+  .results-table tr:last-child td { border-bottom: none; }
+  .results-table tr:hover td { background: var(--surface2); }
+
+  .pid-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--mono);
+  }
+
+  /* ── Compare ── */
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .compare-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+  }
+
+  .compare-card.winner {
+    border-color: var(--accent2);
+    background: rgba(0,212,170,0.05);
+  }
+
+  .winner-badge {
+    display: inline-block;
+    background: var(--accent2);
+    color: #000;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--mono);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Recommendation ── */
+  .rec-box {
+    background: linear-gradient(135deg, rgba(108,99,255,0.1), rgba(0,212,170,0.05));
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .rec-icon {
+    width: 40px; height: 40px;
+    background: var(--accent);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .rec-algo {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .rec-reason {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+
+  /* ── Deadlock ── */
+  .matrix-wrap {
+    overflow-x: auto;
+    margin-bottom: 16px;
+  }
+
+  .matrix-table {
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  .matrix-table th {
+    padding: 8px 12px;
+    background: var(--surface2);
+    color: var(--text2);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    border: 1px solid var(--border);
+  }
+
+  .matrix-table td {
+    border: 1px solid var(--border);
+    padding: 0;
+  }
+
+  .matrix-table td input {
+    width: 60px;
+    background: transparent;
+    border: none;
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    text-align: center;
+    outline: none;
+  }
+
+  .matrix-table td input:focus {
+    background: rgba(108,99,255,0.1);
+  }
+
+  /* ── Safe/Unsafe result ── */
+  .safe-result {
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-top: 16px;
+    display: none;
+  }
+
+  .safe-result.safe {
+    background: rgba(0,212,170,0.08);
+    border: 1px solid var(--accent2);
+  }
+
+  .safe-result.unsafe {
+    background: rgba(255,107,107,0.08);
+    border: 1px solid var(--accent3);
+  }
+
+  .safe-sequence {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    align-items: center;
+  }
+
+  .seq-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .seq-arrow {
+    color: var(--text3);
+    font-size: 14px;
+  }
+
+  /* ── Loading spinner ── */
+  .spinner {
+    display: none;
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading .spinner { display: block; }
+  .loading .btn-text { display: none; }
+
+  /* ── Error ── */
+  .error-msg {
+    background: rgba(255,107,107,0.08);
+    border: 1px solid var(--accent3);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--accent3);
+    margin-top: 12px;
+    display: none;
+    font-family: var(--mono);
+  }
+
+  /* ── Section visibility ── */
+  .section { display: none; }
+  .section.active { display: block; }
+
+  /* ── Colors for process blocks ── */
+  .c0 { background: #6c63ff; color: #fff; }
+  .c1 { background: #00d4aa; color: #000; }
+  .c2 { background: #ff6b6b; color: #fff; }
+  .c3 { background: #ffd93d; color: #000; }
+  .c4 { background: #a78bfa; color: #fff; }
+  .c5 { background: #fb923c; color: #fff; }
+  .c6 { background: #34d399; color: #000; }
+  .c7 { background: #f472b6; color: #fff; }
+
+  .need-matrix-section { margin-top: 16px; display: none; }
+  .need-matrix-section.show { display: block; }
+
+  @media (max-width: 640px) {
+    header { padding: 16px 20px; }
+    main { padding: 24px 16px; }
+    .compare-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">PS</div>
+  <div>
+    <h1>Process Scheduling & Resource Allocation Manager</h1>
+    <p>PBL Project — Operating Systems | 4th Semester</p>
+  </div>
+  <div class="status-dot">
+    <div class="dot" id="statusDot"></div>
+    <span id="statusText">connecting...</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('scheduling')">CPU Scheduling</button>
+    <button class="tab" onclick="switchTab('compare')">Compare Algorithms</button>
+    <button class="tab" onclick="switchTab('deadlock')">Deadlock Detection</button>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- TAB 1: SCHEDULING -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="tab-scheduling" class="section active">
+
+    <!-- Process Input -->
+    <div class="card">
+      <div class="card-title">Process Input</div>
+
+      <table class="process-table">
+        <thead>
+          <tr>
+            <th>Process ID</th>
+            <th>Arrival Time</th>
+            <th>Burst Time</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="processRows">
+          <tr>
+            <td><input type="text" value="P1" placeholder="P1"></td>
+            <td><input type="number" value="0" min="0" placeholder="0"></td>
+            <td><input type="number" value="5" min="1" placeholder="5"></td>
+            <td><button class="btn-icon" onclick="removeRow(this)">×</button></td>
+          </tr>
+          <tr>
+            <td><input type="text" value="P2" placeholder="P2"></td>
+            <td><input type="number" value="2" min="0" placeholder="0"></td>
+            <td><input type="number" value="3" min="1" placeholder="3"></td>
+            <td><button class="btn-icon" onclick="removeRow(this)">×</button></td>
+          </tr>
+          <tr>
+            <td><input type="text" value="P3" placeholder="P3"></td>
+            <td><input type="number" value="4" min="0" placeholder="0"></td>
+            <td><input type="number" value="1" min="1" placeholder="1"></td>
+            <td><button class="btn-icon" onclick="removeRow(this)">×</button></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="btn-row" style="margin-bottom: 20px;">
+        <button class="btn-add" onclick="addRow()">+ Add Process</button>
+      </div>
+
+      <div class="card-title">Select Algorithm</div>
+      <div class="algo-pills">
+        <button class="algo-pill active" data-algo="fcfs" onclick="selectAlgo(this)">FCFS</button>
+        <button class="algo-pill" data-algo="sjf" onclick="selectAlgo(this)">SJF</button>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="runBtn" onclick="runScheduling()">
+          <div class="spinner"></div>
+          <span class="btn-text">Run Simulation</span>
+        </button>
+        <button class="btn btn-secondary" onclick="clearResults()">Clear</button>
+      </div>
+      <div class="error-msg" id="schedError"></div>
+    </div>
+
+    <!-- Results -->
+    <div id="schedResults" style="display:none;">
+
+      <!-- Recommendation -->
+      <div class="card" id="recCard" style="display:none;">
+        <div class="card-title">Recommendation</div>
+        <div class="rec-box">
+          <div class="rec-icon">💡</div>
+          <div>
+            <div class="rec-algo" id="recAlgo"></div>
+            <div class="rec-reason" id="recReason"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Metrics -->
+      <div class="card">
+        <div class="card-title">Performance Metrics</div>
+        <div class="metrics-grid" id="metricsGrid"></div>
+
+        <!-- Gantt Chart -->
+        <div class="card-title" style="margin-top: 8px;">Gantt Chart</div>
+        <div class="gantt-wrap">
+          <div class="gantt-chart" id="ganttChart"></div>
+          <div class="gantt-timeline">
+            <div class="gantt-ticks-row" id="ganttTicks"></div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="card-title" style="margin-top: 24px;">Process Details</div>
+        <table class="results-table" id="resultsTable">
+          <thead>
+            <tr>
+              <th>Process</th>
+              <th>Arrival</th>
+              <th>Burst</th>
+              <th>Completion</th>
+              <th>Waiting</th>
+              <th>Turnaround</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- TAB 2: COMPARE -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="tab-compare" class="section">
+
+    <div class="card">
+      <div class="card-title">Process Input (Same for Both)</div>
+      <table class="process-table">
+        <thead>
+          <tr>
+            <th>Process ID</th>
+            <th>Arrival Time</th>
+            <th>Burst Time</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="compareRows">
+          <tr>
+            <td><input type="text" value="P1" placeholder="P1"></td>
+            <td><input type="number" value="0" min="0"></td>
+            <td><input type="number" value="5" min="1"></td>
+            <td><button class="btn-icon" onclick="removeRow(this)">×</button></td>
+          </tr>
+          <tr>
+            <td><input type="text" value="P2" placeholder="P2"></td>
+            <td><input type="number" value="2" min="0"></td>
+            <td><input type="number" value="3" min="1"></td>
+            <td><button class="btn-icon" onclick="removeRow(this)">×</button></td>
+          </tr>
+          <tr>
+            <td><input type="text" value="P3" placeholder="P3"></td>
+            <td><input type="number" value="4" min="0"></td>
+            <td><input type="number" value="1" min="1"></td>
+            <td><button class="btn-icon" onclick="removeRow(this)">×</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="btn-row" style="margin-bottom: 20px;">
+        <button class="btn-add" onclick="addCompareRow()">+ Add Process</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="compareBtn" onclick="runCompare()">
+          <div class="spinner"></div>
+          <span class="btn-text">Compare FCFS vs SJF</span>
+        </button>
+      </div>
+      <div class="error-msg" id="compareError"></div>
+    </div>
+
+    <div id="compareResults" style="display:none;">
+      <div class="card">
+        <div class="card-title">Side-by-Side Comparison</div>
+        <div class="compare-grid" id="compareGrid"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Gantt Charts</div>
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 12px; font-family: var(--mono); color: var(--text2); margin-bottom: 8px;">FCFS</div>
+          <div class="gantt-wrap"><div class="gantt-chart" id="ganttFCFS"></div></div>
+        </div>
+        <div>
+          <div style="font-size: 12px; font-family: var(--mono); color: var(--text2); margin-bottom: 8px; margin-top: 16px;">SJF</div>
+          <div class="gantt-wrap"><div class="gantt-chart" id="ganttSJF"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- TAB 3: DEADLOCK -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="tab-deadlock" class="section">
+
+    <div class="card">
+      <div class="card-title">Banker's Algorithm — Deadlock Detection</div>
+
+      <div style="display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; align-items: flex-end;">
+        <div>
+          <div style="font-size: 11px; color: var(--text2); font-family: var(--mono); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em;">Processes</div>
+          <input type="number" id="numProc" value="3" min="2" max="8" style="width: 80px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; color: var(--text); font-family: var(--mono); font-size: 14px; outline: none;">
+        </div>
+        <div>
+          <div style="font-size: 11px; color: var(--text2); font-family: var(--mono); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em;">Resource Types</div>
+          <input type="number" id="numRes" value="3" min="1" max="6" style="width: 80px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; color: var(--text); font-family: var(--mono); font-size: 14px; outline: none;">
+        </div>
+        <button class="btn btn-secondary" onclick="generateMatrices()">Generate Matrices</button>
+      </div>
+
+      <div id="matricesArea" style="display:none;">
+        <!-- Allocation Matrix -->
+        <div style="margin-bottom: 20px;">
+          <div class="card-title">Allocation Matrix</div>
+          <div class="matrix-wrap"><table class="matrix-table" id="allocTable"></table></div>
+        </div>
+
+        <!-- Maximum Matrix -->
+        <div style="margin-bottom: 20px;">
+          <div class="card-title">Maximum Matrix</div>
+          <div class="matrix-wrap"><table class="matrix-table" id="maxTable"></table></div>
+        </div>
+
+        <!-- Available Resources -->
+        <div style="margin-bottom: 20px;">
+          <div class="card-title">Available Resources</div>
+          <div style="display: flex; gap: 8px;" id="availableInputs"></div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="bankersBtn" onclick="runBankers()">
+            <div class="spinner"></div>
+            <span class="btn-text">Run Banker's Algorithm</span>
+          </button>
+          <button class="btn btn-secondary" onclick="loadSafeExample()">Load Safe Example</button>
+          <button class="btn btn-secondary" onclick="loadUnsafeExample()">Load Unsafe Example</button>
+        </div>
+        <div class="error-msg" id="bankersError"></div>
+      </div>
+
+      <!-- Result -->
+      <div class="safe-result" id="bankersResult">
+        <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;" id="safeStatus"></div>
+        <div style="font-size: 13px; color: var(--text2); margin-bottom: 12px;" id="safeMessage"></div>
+        <div class="safe-sequence" id="safeSequence"></div>
+
+        <div class="need-matrix-section" id="needMatrixSection">
+          <div class="card-title" style="margin-top: 16px;">Need Matrix (Max − Allocation)</div>
+          <div class="matrix-wrap"><table class="matrix-table" id="needTable"></table></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const API = 'http://127.0.0.1:5000';
+const COLORS = ['c0','c1','c2','c3','c4','c5','c6','c7'];
+let selectedAlgo = 'fcfs';
+let processColorMap = {};
+
+// ── Status check ──
+async function checkStatus() {
+  try {
+    const r = await fetch(API + '/');
+    if (r.ok) {
+      document.getElementById('statusDot').className = 'dot online';
+      document.getElementById('statusText').textContent = 'backend online';
+    }
+  } catch {
+    document.getElementById('statusDot').className = 'dot';
+    document.getElementById('statusText').textContent = 'backend offline';
+  }
+}
+checkStatus();
+setInterval(checkStatus, 10000);
+
+// ── Tab switching ──
+function switchTab(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ── Algorithm selector ──
+function selectAlgo(el) {
+  document.querySelectorAll('.algo-pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  selectedAlgo = el.dataset.algo;
+}
+
+// ── Row management ──
+function addRow() {
+  const tbody = document.getElementById('processRows');
+  const n = tbody.rows.length + 1;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" value="P${n}" placeholder="P${n}"></td>
+    <td><input type="number" value="0" min="0"></td>
+    <td><input type="number" value="1" min="1"></td>
+    <td><button class="btn-icon" onclick="removeRow(this)">×</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function addCompareRow() {
+  const tbody = document.getElementById('compareRows');
+  const n = tbody.rows.length + 1;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" value="P${n}" placeholder="P${n}"></td>
+    <td><input type="number" value="0" min="0"></td>
+    <td><input type="number" value="1" min="1"></td>
+    <td><button class="btn-icon" onclick="removeRow(this)">×</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function removeRow(btn) {
+  const tr = btn.closest('tr');
+  const tbody = tr.parentElement;
+  if (tbody.rows.length > 1) tr.remove();
+}
+
+// ── Get processes from table ──
+function getProcesses(tbodyId) {
+  const rows = document.getElementById(tbodyId).rows;
+  const procs = [];
+  for (const row of rows) {
+    const inputs = row.querySelectorAll('input');
+    procs.push({
+      id: inputs[0].value.trim() || `P${procs.length+1}`,
+      arrival_time: parseInt(inputs[1].value) || 0,
+      burst_time: parseInt(inputs[2].value) || 1
+    });
+  }
+  return procs;
+}
+
+// ── Color map ──
+function buildColorMap(processes) {
+  processColorMap = {};
+  processes.forEach((p, i) => {
+    processColorMap[p.id] = COLORS[i % COLORS.length];
+  });
+}
+
+// ── Run Scheduling ──
+async function runScheduling() {
+  const btn = document.getElementById('runBtn');
+  const errEl = document.getElementById('schedError');
+  errEl.style.display = 'none';
+  btn.classList.add('loading');
+
+  try {
+    const processes = getProcesses('processRows');
+    buildColorMap(processes);
+
+    const endpoint = selectedAlgo === 'fcfs' ? '/api/fcfs' : '/api/sjf';
+    const [schedRes, recRes] = await Promise.all([
+      fetch(API + endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({processes}) }),
+      fetch(API + '/api/recommend', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({processes}) })
+    ]);
+
+    if (!schedRes.ok) {
+      const e = await schedRes.json();
+      throw new Error(e.error || 'Server error');
+    }
+
+    const data = await schedRes.json();
+    const rec = await recRes.json();
+
+    renderResults(data, rec);
+    document.getElementById('schedResults').style.display = 'block';
+
+  } catch(e) {
+    errEl.textContent = '⚠ ' + (e.message || 'Could not connect to backend. Make sure python app.py is running.');
+    errEl.style.display = 'block';
+  } finally {
+    btn.classList.remove('loading');
+  }
+}
+
+// ── Render Results ──
+function renderResults(data, rec) {
+  const avg = data.averages;
+
+  // Metrics
+  document.getElementById('metricsGrid').innerHTML = `
+    <div class="metric-card">
+      <div class="metric-val">${avg.avg_waiting_time}</div>
+      <div class="metric-label">Avg Waiting Time</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val green">${avg.avg_turnaround_time}</div>
+      <div class="metric-label">Avg Turnaround</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val yellow">${data.metrics.length}</div>
+      <div class="metric-label">Processes</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">${data.gantt[data.gantt.length-1].end}</div>
+      <div class="metric-label">Total Time</div>
+    </div>
+  `;
+
+  // Gantt
+  renderGantt('ganttChart', data.gantt);
+
+  // Table
+  const tbody = document.getElementById('resultsBody');
+  tbody.innerHTML = '';
+  for (const m of data.metrics) {
+    const c = processColorMap[m.id] || 'c0';
+    tbody.innerHTML += `
+      <tr>
+        <td><span class="pid-badge ${c}">${m.id}</span></td>
+        <td>${m.arrival_time}</td>
+        <td>${m.burst_time}</td>
+        <td>${m.completion_time}</td>
+        <td>${m.waiting_time}</td>
+        <td>${m.turnaround_time}</td>
+      </tr>
+    `;
+  }
+
+  // Recommendation
+  if (rec) {
+    document.getElementById('recAlgo').textContent = rec.recommended_algorithm;
+    document.getElementById('recReason').textContent = rec.reason;
+    document.getElementById('recCard').style.display = 'block';
+  }
+}
+
+// ── Render Gantt Chart ──
+function renderGantt(containerId, gantt) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  if (!gantt || gantt.length === 0) return;
+
+  const totalTime = gantt[gantt.length - 1].end;
+  const startTime = gantt[0].start;
+
+  // Group gantt blocks by process
+  const pidOrder = [...new Set(gantt.map(g => g.id))];
+
+  for (const pid of pidOrder) {
+    const blocks = gantt.filter(g => g.id === pid);
+    const row = document.createElement('div');
+    row.className = 'gantt-row';
+
+    const label = document.createElement('div');
+    label.className = 'gantt-label';
+    label.textContent = pid;
+    row.appendChild(label);
+
+    const track = document.createElement('div');
+    track.className = 'gantt-track';
+
+    for (const block of blocks) {
+      const left = ((block.start - startTime) / (totalTime - startTime)) * 100;
+      const width = ((block.end - block.start) / (totalTime - startTime)) * 100;
+      const el = document.createElement('div');
+      el.className = `gantt-block ${processColorMap[pid] || 'c0'}`;
+      el.style.left = left + '%';
+      el.style.width = width + '%';
+      el.textContent = pid;
+      el.title = `${pid}: ${block.start} → ${block.end} (burst: ${block.end - block.start})`;
+      track.appendChild(el);
+    }
+
+    row.appendChild(track);
+    container.appendChild(row);
+  }
+
+  // Time axis row
+  const axisRow = document.createElement('div');
+  axisRow.className = 'gantt-row';
+  axisRow.innerHTML = '<div class="gantt-label"></div>';
+  const axisTrack = document.createElement('div');
+  axisTrack.style.flex = '1';
+  axisTrack.style.position = 'relative';
+  axisTrack.style.height = '20px';
+
+  // Draw tick marks at each unique time
+  const times = [...new Set(gantt.flatMap(g => [g.start, g.end]))].sort((a,b) => a-b);
+  for (const t of times) {
+    const pos = ((t - startTime) / (totalTime - startTime)) * 100;
+    const tick = document.createElement('div');
+    tick.className = 'gantt-tick';
+    tick.style.left = pos + '%';
+    tick.style.transform = 'translateX(-50%)';
+    tick.textContent = t;
+    axisTrack.appendChild(tick);
+  }
+
+  axisRow.appendChild(axisTrack);
+  container.appendChild(axisRow);
+}
+
+// ── Clear ──
+function clearResults() {
+  document.getElementById('schedResults').style.display = 'none';
+  document.getElementById('schedError').style.display = 'none';
+  document.getElementById('recCard').style.display = 'none';
+}
+
+// ── Run Compare ──
+async function runCompare() {
+  const btn = document.getElementById('compareBtn');
+  const errEl = document.getElementById('compareError');
+  errEl.style.display = 'none';
+  btn.classList.add('loading');
+
+  try {
+    const processes = getProcesses('compareRows');
+    buildColorMap(processes);
+
+    const res = await fetch(API + '/api/compare', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({processes})
+    });
+
+    if (!res.ok) {
+      const e = await res.json();
+      throw new Error(e.error || 'Server error');
+    }
+
+    const data = await res.json();
+    renderCompare(data);
+    document.getElementById('compareResults').style.display = 'block';
+
+  } catch(e) {
+    errEl.textContent = '⚠ ' + (e.message || 'Could not connect to backend.');
+    errEl.style.display = 'block';
+  } finally {
+    btn.classList.remove('loading');
+  }
+}
+
+// ── Render Compare ──
+function renderCompare(data) {
+  const { fcfs, sjf, comparison } = data;
+  const betterWT = comparison.better_waiting_time;
+  const betterTAT = comparison.better_turnaround_time;
+  const fcfsWins = betterWT === 'FCFS' && betterTAT === 'FCFS';
+  const sjfWins = betterWT === 'SJF' && betterTAT === 'SJF';
+
+  document.getElementById('compareGrid').innerHTML = `
+    <div class="compare-card ${fcfsWins ? 'winner' : ''}">
+      <div style="font-family: var(--mono); font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--text);">
+        FCFS ${fcfsWins ? '<span class="winner-badge">WINNER</span>' : ''}
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; color: var(--text2);">Avg Waiting Time</span>
+          <span style="font-family: var(--mono); font-weight: 700; color: ${betterWT === 'FCFS' ? 'var(--accent2)' : 'var(--text)'}">
+            ${fcfs.averages.avg_waiting_time} ${betterWT === 'FCFS' ? '✓' : ''}
+          </span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; color: var(--text2);">Avg Turnaround</span>
+          <span style="font-family: var(--mono); font-weight: 700; color: ${betterTAT === 'FCFS' ? 'var(--accent2)' : 'var(--text)'}">
+            ${fcfs.averages.avg_turnaround_time} ${betterTAT === 'FCFS' ? '✓' : ''}
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="compare-card ${sjfWins ? 'winner' : ''}">
+      <div style="font-family: var(--mono); font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--text);">
+        SJF ${sjfWins ? '<span class="winner-badge">WINNER</span>' : ''}
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; color: var(--text2);">Avg Waiting Time</span>
+          <span style="font-family: var(--mono); font-weight: 700; color: ${betterWT === 'SJF' ? 'var(--accent2)' : 'var(--text)'}">
+            ${sjf.averages.avg_waiting_time} ${betterWT === 'SJF' ? '✓' : ''}
+          </span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; color: var(--text2);">Avg Turnaround</span>
+          <span style="font-family: var(--mono); font-weight: 700; color: ${betterTAT === 'SJF' ? 'var(--accent2)' : 'var(--text)'}">
+            ${sjf.averages.avg_turnaround_time} ${betterTAT === 'SJF' ? '✓' : ''}
+          </span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  renderGantt('ganttFCFS', fcfs.gantt);
+  renderGantt('ganttSJF', sjf.gantt);
+}
+
+// ── Deadlock ──
+function generateMatrices() {
+  const n = parseInt(document.getElementById('numProc').value);
+  const m = parseInt(document.getElementById('numRes').value);
+
+  const resHeaders = Array.from({length: m}, (_, i) => `R${i+1}`);
+
+  function buildMatrix(tableId, n, m, defaultVal = 0) {
+    const table = document.getElementById(tableId);
+    let html = '<thead><tr><th>Process</th>';
+    resHeaders.forEach(r => html += `<th>${r}</th>`);
+    html += '</tr></thead><tbody>';
+    for (let i = 0; i < n; i++) {
+      html += `<tr><th>P${i}</th>`;
+      for (let j = 0; j < m; j++) {
+        html += `<td><input type="number" value="${defaultVal}" min="0" data-row="${i}" data-col="${j}"></td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody>';
+    table.innerHTML = html;
+  }
+
+  buildMatrix('allocTable', n, m, 0);
+  buildMatrix('maxTable', n, m, 0);
+
+  const avail = document.getElementById('availableInputs');
+  avail.innerHTML = '';
+  for (let j = 0; j < m; j++) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div style="font-size: 11px; color: var(--text2); font-family: var(--mono); margin-bottom: 4px; text-align: center;">R${j+1}</div>
+      <input type="number" value="0" min="0" style="width: 70px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; color: var(--text); font-family: var(--mono); font-size: 14px; text-align: center; outline: none;" data-avail="${j}">
+    `;
+    avail.appendChild(wrap);
+  }
+
+  document.getElementById('matricesArea').style.display = 'block';
+  document.getElementById('bankersResult').style.display = 'none';
+}
+
+function getMatrix(tableId) {
+  const inputs = document.getElementById(tableId).querySelectorAll('tbody input');
+  const rows = {};
+  inputs.forEach(inp => {
+    const r = inp.dataset.row;
+    if (!rows[r]) rows[r] = [];
+    rows[r].push(parseInt(inp.value) || 0);
+  });
+  return Object.values(rows);
+}
+
+async function runBankers() {
+  const btn = document.getElementById('bankersBtn');
+  const errEl = document.getElementById('bankersError');
+  errEl.style.display = 'none';
+  btn.classList.add('loading');
+
+  try {
+    const n = parseInt(document.getElementById('numProc').value);
+    const processes = Array.from({length: n}, (_, i) => `P${i}`);
+    const allocation = getMatrix('allocTable');
+    const maximum = getMatrix('maxTable');
+    const available = Array.from(document.querySelectorAll('[data-avail]')).map(i => parseInt(i.value) || 0);
+
+    const res = await fetch(API + '/api/bankers', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({processes, allocation, maximum, available})
+    });
+
+    if (!res.ok) {
+      const e = await res.json();
+      throw new Error(e.error || 'Server error');
+    }
+
+    const data = await res.json();
+    renderBankers(data);
+
+  } catch(e) {
+    errEl.textContent = '⚠ ' + (e.message || 'Could not connect to backend.');
+    errEl.style.display = 'block';
+  } finally {
+    btn.classList.remove('loading');
+  }
+}
+
+function renderBankers(data) {
+  const el = document.getElementById('bankersResult');
+  el.className = 'safe-result ' + (data.safe ? 'safe' : 'unsafe');
+  el.style.display = 'block';
+
+  document.getElementById('safeStatus').textContent = data.safe ? '✓ System is in a SAFE state' : '✗ System is in an UNSAFE state — Deadlock Risk!';
+  document.getElementById('safeStatus').style.color = data.safe ? 'var(--accent2)' : 'var(--accent3)';
+  document.getElementById('safeMessage').textContent = data.message;
+
+  const seqEl = document.getElementById('safeSequence');
+  seqEl.innerHTML = '';
+  if (data.safe && data.safe_sequence.length > 0) {
+    data.safe_sequence.forEach((p, i) => {
+      const item = document.createElement('span');
+      item.className = 'seq-item';
+      item.textContent = p;
+      seqEl.appendChild(item);
+      if (i < data.safe_sequence.length - 1) {
+        const arrow = document.createElement('span');
+        arrow.className = 'seq-arrow';
+        arrow.textContent = '→';
+        seqEl.appendChild(arrow);
+      }
+    });
+  } else if (!data.safe && data.deadlocked_processes) {
+    const label = document.createElement('span');
+    label.style.color = 'var(--accent3)';
+    label.style.fontFamily = 'var(--mono)';
+    label.style.fontSize = '13px';
+    label.textContent = 'Deadlocked: ' + data.deadlocked_processes.join(', ');
+    seqEl.appendChild(label);
+  }
+
+  // Need matrix
+  if (data.need_matrix) {
+    const m = data.need_matrix[0].length;
+    const section = document.getElementById('needMatrixSection');
+    section.classList.add('show');
+    const table = document.getElementById('needTable');
+    let html = '<thead><tr><th>Process</th>';
+    for (let j = 0; j < m; j++) html += `<th>R${j+1}</th>`;
+    html += '</tr></thead><tbody>';
+    data.need_matrix.forEach((row, i) => {
+      html += `<tr><th>P${i}</th>`;
+      row.forEach(v => html += `<td><input type="number" value="${v}" readonly style="width:60px; background:transparent; border:none; padding:8px 12px; color:var(--text); font-family:var(--mono); font-size:13px; text-align:center;"></td>`);
+      html += '</tr>';
+    });
+    html += '</tbody>';
+    table.innerHTML = html;
+  }
+}
+
+// ── Load Examples ──
+function loadSafeExample() {
+  document.getElementById('numProc').value = 5;
+  document.getElementById('numRes').value = 3;
+  generateMatrices();
+
+  const allocData = [[0,1,0],[2,0,0],[3,0,2],[2,1,1],[0,0,2]];
+  const maxData   = [[7,5,3],[3,2,2],[9,0,2],[2,2,2],[4,3,3]];
+  const availData = [3,3,2];
+
+  fillMatrix('allocTable', allocData);
+  fillMatrix('maxTable', maxData);
+  document.querySelectorAll('[data-avail]').forEach((inp, i) => { inp.value = availData[i]; });
+}
+
+function loadUnsafeExample() {
+  document.getElementById('numProc').value = 3;
+  document.getElementById('numRes').value = 2;
+  generateMatrices();
+
+  const allocData = [[1,1],[2,0],[1,1]];
+  const maxData   = [[2,2],[3,1],[1,2]];
+  const availData = [0,0];
+
+  fillMatrix('allocTable', allocData);
+  fillMatrix('maxTable', maxData);
+  document.querySelectorAll('[data-avail]').forEach((inp, i) => { inp.value = availData[i]; });
+}
+
+function fillMatrix(tableId, data) {
+  const inputs = document.getElementById(tableId).querySelectorAll('tbody input');
+  inputs.forEach(inp => {
+    const r = parseInt(inp.dataset.row);
+    const c = parseInt(inp.dataset.col);
+    inp.value = data[r][c];
+  });
+}
+
+// Generate matrices on load
+generateMatrices();
+</script>
+</body>
+</html>
